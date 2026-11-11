@@ -1,310 +1,252 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>محرر فيديو مصغر</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>استوديو الأنشطة</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f1420">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="الاستوديو">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <style>
-:root{--bg:#16171b;--panel:#21232a;--line:#33363f;--txt:#e8e8ec;--v:#2f6fd6;--a:#2f9d6a}
+:root{--bg:#0f1420;--card:#1a2233;--line:#2a3550;--acc:#f5a524;--txt:#e9edf5;--mut:#8b96ad;color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,Tahoma,sans-serif;background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column}
-header{display:flex;gap:8px;padding:8px;background:var(--panel);align-items:center;flex-wrap:wrap}
-button,input{background:#2c2f38;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit}
-main{display:flex;flex:1;min-height:0}
-#left{flex:1;display:flex;padding:8px;min-width:0}
-#pv{width:100%;height:100%;background:#000;border-radius:8px;object-fit:contain}
-#insp{width:240px;background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:10px;font-size:14px}
-#insp label{display:flex;flex-direction:column;gap:4px}
-#tl{height:250px;background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;direction:ltr}
-#tlbar{display:flex;gap:10px;align-items:center;padding:6px 8px;font-size:13px}
-#scroll{overflow:auto;flex:1}
-#inner{position:relative;height:170px}
-#ruler{height:22px;position:relative;border-bottom:1px solid var(--line)}
-.tick{position:absolute;top:0;font-size:10px;color:#999;border-left:1px solid #555;padding-left:2px;height:22px}
-.track{height:74px;position:relative;border-bottom:1px solid var(--line)}
-.clip{position:absolute;top:6px;height:60px;border-radius:6px;padding:4px 6px;font-size:12px;overflow:hidden;white-space:nowrap;cursor:pointer;border:2px solid transparent;direction:rtl}
-.clip.v{background:var(--v)}
-.clip.a{background:var(--a)}
-.clip.sel{border-color:#fff}
-#ph{position:absolute;top:0;bottom:0;width:2px;background:#ff5c5c;pointer-events:none;z-index:5}
-#time{font-variant-numeric:tabular-nums;font-size:15px;direction:ltr}
+body{margin:0;font-family:system-ui,"Segoe UI",Tahoma,sans-serif;background:var(--bg);color:var(--txt);padding:env(safe-area-inset-top,0px) 16px env(safe-area-inset-bottom,0px)}
+h1{font-size:20px;margin:16px 0 4px}
+.sub{color:var(--mut);font-size:13px;margin-bottom:8px}
+.wrap{display:grid;grid-template-columns:1fr;gap:16px;max-width:1200px;margin:auto;padding-bottom:24px}
+@media(min-width:900px){.wrap{grid-template-columns:1fr 1fr}.full{grid-column:1/-1}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+h2{font-size:15px;margin:0 0 10px;color:var(--acc)}
+button{background:var(--line);color:var(--txt);border:0;border-radius:9px;padding:8px 12px;font:inherit;cursor:pointer}
+button.p{background:var(--acc);color:#111;font-weight:700}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;max-height:260px;overflow:auto}
+.th{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#000;cursor:pointer;border:2px solid transparent}
+.th img,.th video{width:100%;height:100%;object-fit:cover;display:block}
+.th .badge{position:absolute;bottom:4px;left:4px;background:#000b;font-size:11px;padding:2px 6px;border-radius:6px}
+.th:hover{border-color:var(--acc)}
+.clip{display:grid;grid-template-columns:72px 1fr;gap:10px;background:#121a2a;border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px;cursor:grab}
+.clip.over{border-color:var(--acc)}
+.clip img,.clip video{width:72px;height:72px;object-fit:cover;border-radius:8px;background:#000}
+.clip input,.clip select{background:#0b1020;color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:5px;font:inherit;font-size:13px}
+.clip input[type=text]{width:100%;margin:4px 0}
+.small{font-size:12px;color:var(--mut)}
+canvas{width:100%;border-radius:10px;background:#000;display:block;aspect-ratio:16/9}
+.bar{height:6px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--acc)}
+.empty{color:var(--mut);font-size:13px;padding:12px;text-align:center;grid-column:1/-1}
 </style>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#21232a">
-<link rel="apple-touch-icon" href="icon-512.png">
 </head>
 <body>
-<header>
-  <button onclick="pick('v')">+ فيديو</button>
-  <button onclick="pick('a')">+ صوت</button>
-  <button id="bPlay" onclick="togglePlay()">▶ تشغيل</button>
-  <button onclick="step(-1)">◀ إطار</button>
-  <button onclick="step(1)">إطار ▶</button>
-  <span id="time">00:00.00</span>
-  <button onclick="split()">✂ قص عند المؤشر</button>
-  <button onclick="delSel()">🗑 حذف</button>
-  <button onclick="exportWebM()">⬇ تصدير WebM</button>
-  <span id="status" style="font-size:12px;color:#aaa"></span>
-</header>
-<main>
-  <div id="left"><canvas id="pv" width="1280" height="720"></canvas></div>
-  <aside id="insp"><b>الخصائص</b><div id="iForm">اختر مقطعاً من المسار الزمني</div></aside>
-</main>
-<section id="tl">
-  <div id="tlbar"><span>تكبير</span><input type="range" min="10" max="200" value="50" oninput="pxPerSec=+this.value;render()"></div>
-  <div id="scroll"><div id="inner"></div></div>
-</section>
-<input type="file" id="fi" hidden>
-<video id="vid" playsinline style="position:fixed;width:1px;opacity:0;pointer-events:none"></video>
-<audio id="aud"></audio>
+<div class="wrap">
+  <div class="full">
+    <h1>استوديو الأنشطة</h1>
+    <div class="sub">ارفع صور وفيديوهات النشاط، رتّبها بالسحب، قصّ المقاطع، أضف تعليقات وفلاتر، ثم صدّر فيلمك.</div>
+  </div>
+
+  <div class="card full">
+    <h2>1 · مكتبة الوسائط</h2>
+    <div class="row" style="margin-bottom:10px">
+      <button class="p" onclick="fi.click()">+ استيراد</button>
+      <button onclick="addAll()">إضافة الكل إلى الخط الزمني</button>
+      <span class="small" id="cnt"></span>
+    </div>
+    <input type="file" id="fi" accept="image/*,video/*" multiple hidden>
+    <div id="lib"><div class="empty">لا توجد وسائط بعد — اضغط «استيراد»</div></div>
+  </div>
+
+  <div class="card">
+    <h2>2 · الخط الزمني (اسحب لإعادة الترتيب)</h2>
+    <div id="tl"><div class="empty">الخط الزمني فارغ — أضف وسائط من المكتبة</div></div>
+    <div class="small" id="tot" style="margin-top:6px"></div>
+  </div>
+
+  <div class="card">
+    <h2>3 · المعاينة والتصدير</h2>
+    <canvas id="cv" width="1280" height="720"></canvas>
+    <div class="bar"><i id="pb"></i></div>
+    <div class="row" style="margin-top:10px">
+      <button class="p" id="play" onclick="togglePlay()">▶ تشغيل</button>
+      <button onclick="exportFilm()">⬇ تصدير WebM</button>
+      <span class="small" id="st"></span>
+    </div>
+  </div>
+</div>
 
 <script>
-const $ = id => document.getElementById(id);
-let clips = [], nextId = 1, pxPerSec = 50, playhead = 0, playing = false, selId = null, last = 0, exporting = null;
-const vid = $('vid'), aud = $('aud'), cv = $('pv'), ctx = cv.getContext('2d'), inner = $('inner');
-const els = { v: vid, a: aud };
+const $=id=>document.getElementById(id), cv=$('cv'), ctx=cv.getContext('2d'), W=cv.width, H=cv.height;
+let lib=[], tl=[], uid=0, playing=false, idx=0, clipT0=0, raf=0, rec=null, chunks=[], ac=null, mix=null, dragI=-1;
+const FX={none:'none',gray:'grayscale(100%)',sepia:'sepia(80%)',bright:'brightness(1.25) contrast(1.1)',warm:'saturate(1.5) hue-rotate(-12deg)'};
+const FXN={none:'بدون فلتر',gray:'أبيض وأسود',sepia:'بني قديم',bright:'إضاءة قوية',warm:'دافئ'};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const msg=t=>$('st').textContent=t;
+const total=()=>tl.reduce((s,c)=>s+(c.isV?Math.max(0,c.end-c.start):c.dur),0);
 
-// Graphe audio : permet d'enregistrer le son pendant l'export
-const AC = new (window.AudioContext || window.webkitAudioContext)();
-const dest = AC.createMediaStreamDestination();
-[vid, aud].forEach(el => {
-  const src = AC.createMediaElementSource(el);
-  src.connect(AC.destination);
-  src.connect(dest);
-});
-
-const L = c => (c.out - c.in) / c.speed;                       // durée sur la timeline
-const total = () => clips.reduce((m, c) => Math.max(m, c.start + L(c)), 0);
-const clipAt = (k, t) => clips.find(c => c.track === k && t >= c.start && t < c.start + L(c));
-const sel = () => clips.find(c => c.id === selId);
-const fmt = t => String(Math.floor(t / 60)).padStart(2, '0') + ':' + (t % 60).toFixed(2).padStart(5, '0');
-
-// Synchronise un élément média avec la tête de lecture
-function place(k, force) {
-  const el = els[k], c = clipAt(k, playhead);
-  if (!c) { el.pause(); el.dataset.cid = ''; return; }
-  const t = c.in + (playhead - c.start) * c.speed;
-  if (el.dataset.cid != c.id) {
-    el.dataset.cid = c.id;
-    el.dataset.want = t;
-    el.src = c.url;
-  } else if (force) {
-    el.currentTime = t;
-  }
-  el.playbackRate = c.speed;
-  el.volume = c.vol;
-  if (playing && el.paused) el.play().catch(() => {});
-  if (!playing && !el.paused) el.pause();
-}
-[vid, aud].forEach(el => el.addEventListener('loadedmetadata', () => {
-  if (el.dataset.want !== undefined) {
-    el.currentTime = +el.dataset.want;
-    delete el.dataset.want;
-    if (playing) el.play().catch(() => {});
-  }
-}));
-
-function seek(t, force = true) {
-  playhead = Math.max(0, Math.min(t, total()));
-  place('v', force); place('a', force);
-  updateUI();
-}
-
-function setPlayBtn() { $('bPlay').textContent = playing ? '⏸ إيقاف' : '▶ تشغيل'; }
-
-function togglePlay() {
-  if (exporting) return;
-  AC.resume();
-  playing = !playing;
-  if (playing && playhead >= total()) playhead = 0;
-  setPlayBtn();
-  last = performance.now();
-  place('v', true); place('a', true);
-}
-
-function step(n) {
-  if (playing) togglePlay();
-  seek(playhead + n / 30);
-}
-
-// Boucle principale : avance la tête, dessine l'aperçu
-function tick(now) {
-  if (playing) {
-    playhead += (now - last) / 1000;
-    if (playhead >= total()) {
-      playhead = total();
-      if (exporting) stopExport(); else togglePlay();
-    } else {
-      place('v'); place('a');
+function load(f){
+  return new Promise(res=>{
+    const isV=f.type.startsWith('video'), url=URL.createObjectURL(f);
+    const base={isV,url,name:f.name,dur:4,start:0,end:0,cap:'',filter:'none'};
+    if(isV){
+      const el=document.createElement('video'); el.playsInline=true; el.preload='auto';
+      el.onloadedmetadata=()=>res({...base,el,end:isFinite(el.duration)?el.duration:10});
+      el.src=url;
+    }else{
+      const el=new Image();
+      el.onload=()=>res({...base,el});
+      el.src=url;
     }
-  }
-  last = now;
-  draw();
-  updateUI();
-  requestAnimationFrame(tick);
-}
-
-function draw() {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, cv.width, cv.height);
-  const c = clipAt('v', playhead);
-  if (c && vid.dataset.cid == c.id && vid.readyState >= 2 && vid.videoWidth) {
-    const r = Math.min(cv.width / vid.videoWidth, cv.height / vid.videoHeight);
-    const w = vid.videoWidth * r, h = vid.videoHeight * r;
-    ctx.drawImage(vid, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
-  }
-}
-
-function updateUI() {
-  $('time').textContent = fmt(playhead);
-  const ph = $('ph');
-  if (ph) ph.style.left = (playhead * pxPerSec) + 'px';
-}
-
-// Import
-function pick(k) {
-  $('fi').accept = k === 'v' ? 'video/*' : 'audio/*';
-  $('fi').dataset.k = k;
-  $('fi').click();
-}
-$('fi').onchange = e => {
-  const file = e.target.files[0], k = e.target.dataset.k;
-  e.target.value = '';
-  if (!file) return;
-  const url = URL.createObjectURL(file);
-  const m = document.createElement(k === 'v' ? 'video' : 'audio');
-  m.preload = 'metadata';
-  m.src = url;
-  m.onloadedmetadata = () => {
-    const start = clips.filter(c => c.track === k).reduce((mx, c) => Math.max(mx, c.start + L(c)), 0);
-    clips.push({ id: nextId++, track: k, name: file.name, url, start, in: 0, out: m.duration, speed: 1, vol: 1 });
-    render();
-  };
-};
-
-// Montage
-function split() {
-  const hits = clips.filter(c => playhead > c.start + 0.01 && playhead < c.start + L(c) - 0.01);
-  if (!hits.length) { $('status').textContent = 'لا يوجد مقطع عند المؤشر'; return; }
-  hits.forEach(c => {
-    const off = (playhead - c.start) * c.speed;
-    const right = { ...c, id: nextId++, start: playhead, in: c.in + off };
-    c.out = c.in + off;
-    clips.push(right);
   });
-  $('status').textContent = '';
-  render();
 }
-
-function delSel() {
-  if (selId == null) return;
-  clips = clips.filter(c => c.id !== selId);
-  selId = null;
-  render();
-  updateInspector();
-  place('v', true); place('a', true);
-}
-
-function setP(k, v) {
-  const c = sel();
-  if (!c) return;
-  c[k] = v;
-  render();
-  place('v'); place('a');
-}
-
-function updateInspector() {
-  const c = sel();
-  if (!c) { $('iForm').textContent = 'اختر مقطعاً من المسار الزمني'; return; }
-  $('iForm').innerHTML = `
-    <div style="word-break:break-all">${c.name}</div>
-    <label>السرعة: ${c.speed}x
-      <input type="range" min="0.25" max="4" step="0.25" value="${c.speed}" oninput="this.previousSibling.textContent='السرعة: '+this.value+'x';setP('speed',+this.value)">
-    </label>
-    <label>الصوت: ${Math.round(c.vol * 100)}%
-      <input type="range" min="0" max="1" step="0.05" value="${c.vol}" oninput="this.previousSibling.textContent='الصوت: '+Math.round(this.value*100)+'%';setP('vol',+this.value)">
-    </label>
-    <small>المدة على المسار: ${L(c).toFixed(2)} ث</small>`;
-}
-
-// Timeline
-function render() {
-  const T = total(), W = Math.max(T + 5, 30) * pxPerSec;
-  const step = pxPerSec < 25 ? 5 : 1;
-  let ticks = '';
-  for (let s = 0; s * pxPerSec <= W; s += step) {
-    ticks += `<span class="tick" style="left:${s * pxPerSec}px">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</span>`;
-  }
-  const row = k => clips.filter(c => c.track === k).map(c =>
-    `<div class="clip ${k}${c.id === selId ? ' sel' : ''}" data-id="${c.id}"
-      style="left:${c.start * pxPerSec}px;width:${Math.max(L(c) * pxPerSec, 8)}px">${c.name}</div>`).join('');
-  inner.style.width = W + 'px';
-  inner.innerHTML = `<div id="ruler">${ticks}</div>
-    <div class="track" data-t="v">${row('v')}</div>
-    <div class="track" data-t="a">${row('a')}</div><div id="ph"></div>`;
-  updateUI();
-}
-
-inner.onclick = e => {
-  const cl = e.target.closest('.clip');
-  if (cl) {
-    selId = +cl.dataset.id;
-    render();
-    updateInspector();
-    return;
-  }
-  if (e.target.closest('#ruler,.track')) {
-    const r = inner.getBoundingClientRect();
-    seek((e.clientX - r.left) / pxPerSec);
-  }
+fi.onchange=async e=>{
+  msg('جاري التحميل…');
+  for(const f of e.target.files) lib.push({id:++uid,...(await load(f))});
+  e.target.value=''; msg(''); renderLib();
 };
 
-// Export : rejoue le montage dans un canevas et enregistre en WebM
-function exportWebM() {
-  if (!clips.length || exporting) return;
-  AC.resume();
-  const rec = new MediaRecorder(
-    new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]),
-    { mimeType: 'video/webm;codecs=vp8,opus' }
-  );
-  exporting = { rec, chunks: [] };
-  rec.ondataavailable = e => e.data.size && exporting.chunks.push(e.data);
-  rec.onstop = () => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob(exporting.chunks, { type: 'video/webm' }));
-    a.download = 'montage.webm';
-    a.click();
-    exporting = null;
-    $('status').textContent = 'تم التصدير';
+function renderLib(){
+  $('cnt').textContent=lib.length?lib.length+' ملف':'';
+  if(!lib.length) return $('lib').innerHTML='<div class="empty">لا توجد وسائط بعد — اضغط «استيراد»</div>';
+  $('lib').innerHTML=lib.map((m,i)=>`<div class="th" title="${esc(m.name)}" onclick="addClip(${i})">${
+    m.isV?`<video src="${m.url}" muted preload="metadata"></video><span class="badge">🎬</span>`:`<img src="${m.url}" alt="">`}</div>`).join('');
+}
+function addClip(i){
+  const m=lib[i]; tl.push({...m,tid:++uid,start:m.start,end:m.end}); renderTL();
+}
+function addAll(){ lib.forEach((_,i)=>addClip(i)); }
+
+function renderTL(){
+  if(!tl.length){ $('tl').innerHTML='<div class="empty">الخط الزمني فارغ — أضف وسائط من المكتبة</div>'; $('tot').textContent=''; return; }
+  $('tl').innerHTML=tl.map((c,i)=>`
+  <div class="clip" draggable="true" data-i="${i}">
+    ${c.isV?`<video src="${c.url}" muted preload="metadata"></video>`:`<img src="${c.url}" alt="">`}
+    <div>
+      <div class="small">${i+1}. ${esc(c.name)}</div>
+      ${c.isV
+        ?`<div class="row small">من <input type="number" step="0.1" min="0" value="${c.start.toFixed(1)}" style="width:70px" onchange="upd(${i},'start',+this.value)"> إلى <input type="number" step="0.1" value="${c.end.toFixed(1)}" style="width:70px" onchange="upd(${i},'end',+this.value)"> ث</div>`
+        :`<div class="row small">المدة <input type="number" min="1" step="0.5" value="${c.dur}" style="width:70px" onchange="upd(${i},'dur',+this.value)"> ث</div>`}
+      <input type="text" placeholder="عنوان / تعليق يظهر في الفيديو" value="${esc(c.cap)}" oninput="upd(${i},'cap',this.value)">
+      <div class="row">
+        <select onchange="upd(${i},'filter',this.value)">${Object.keys(FX).map(k=>`<option value="${k}" ${c.filter===k?'selected':''}>${FXN[k]}</option>`).join('')}</select>
+        <button onclick="rm(${i})">✕ حذف</button>
+      </div>
+    </div>
+  </div>`).join('');
+  $('tot').textContent=`المدة الإجمالية: ${total().toFixed(1)} ث · ${tl.length} مقطع`;
+  document.querySelectorAll('.clip').forEach(el=>{
+    el.ondragstart=e=>{dragI=+el.dataset.i; e.dataTransfer.effectAllowed='move';};
+    el.ondragover=e=>{e.preventDefault(); el.classList.add('over');};
+    el.ondragleave=()=>el.classList.remove('over');
+    el.ondrop=e=>{e.preventDefault(); const to=+el.dataset.i; const [m]=tl.splice(dragI,1); tl.splice(to,0,m); renderTL();};
+  });
+}
+function upd(i,k,v){
+  if(k==='cap'||k==='filter') tl[i][k]=v;
+  else tl[i][k]=isNaN(v)?0:v;
+  if(k!=='cap') renderTL();
+}
+function rm(i){ tl.splice(i,1); renderTL(); }
+
+function audio(){
+  if(!ac){
+    ac=new (window.AudioContext||window.webkitAudioContext)();
+    mix=ac.createMediaStreamDestination();
+  }
+  if(ac.state==='suspended') ac.resume();
+  tl.forEach(c=>{
+    if(c.isV && !c.el._n){
+      c.el._n=ac.createMediaElementSource(c.el);
+      c.el._n.connect(ac.destination);
+      c.el._n.connect(mix);
+    }
+  });
+}
+
+function togglePlay(){ playing?finish():play(); }
+function play(){
+  if(!tl.length) return msg('أضف وسائط أولاً');
+  audio(); playing=true; $('play').textContent='⏹ إيقاف';
+  startClip(0); raf=requestAnimationFrame(frame);
+}
+function startClip(i){
+  idx=i; const c=tl[i];
+  if(!c) return finish();
+  clipT0=performance.now();
+  if(c.isV){ c.el.currentTime=c.start; c.el.play().catch(()=>{}); }
+}
+function frame(){
+  if(!playing) return;
+  const c=tl[idx];
+  if(!c) return finish();
+  const now=performance.now(), elapsed=(now-clipT0)/1000;
+  let prog;
+  if(c.isV){
+    const ended=(now-clipT0>300)&&(c.el.ended||c.el.currentTime>=c.end-0.05);
+    if(ended){ c.el.pause(); return nextClip(); }
+    prog=Math.max(0,c.el.currentTime-c.start);
+  }else{
+    if(elapsed>=c.dur) return nextClip();
+    prog=elapsed;
+  }
+  drawClip(c);
+  const before=tl.slice(0,idx).reduce((s,x)=>s+(x.isV?Math.max(0,x.end-x.start):x.dur),0);
+  $('pb').style.width=Math.min(100,(before+prog)/Math.max(total(),0.1)*100)+'%';
+  raf=requestAnimationFrame(frame);
+}
+function nextClip(){
+  if(idx+1<tl.length){ startClip(idx+1); raf=requestAnimationFrame(frame); }
+  else finish();
+}
+function drawClip(c){
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  const sw=c.isV?c.el.videoWidth:c.el.naturalWidth, sh=c.isV?c.el.videoHeight:c.el.naturalHeight;
+  if(sw&&sh){
+    const k=Math.min(W/sw,H/sh), dw=sw*k, dh=sh*k;
+    ctx.filter=FX[c.filter]||'none';
+    ctx.drawImage(c.el,(W-dw)/2,(H-dh)/2,dw,dh);
+    ctx.filter='none';
+  }
+  if(c.cap){
+    const g=ctx.createLinearGradient(0,H-170,0,H);
+    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,.75)');
+    ctx.fillStyle=g; ctx.fillRect(0,H-170,W,170);
+    ctx.fillStyle='#fff'; ctx.font='bold 46px system-ui, sans-serif'; ctx.textAlign='center';
+    ctx.fillText(c.cap,W/2,H-60);
+  }
+}
+function finish(){
+  playing=false; cancelAnimationFrame(raf);
+  tl.forEach(c=>{ if(c.isV) c.el.pause(); });
+  $('play').textContent='▶ تشغيل';
+  if(rec && rec.state!=='inactive') rec.stop();
+  else $('pb').style.width='0';
+}
+
+function exportFilm(){
+  if(!tl.length) return msg('أضف وسائط أولاً');
+  if(!window.MediaRecorder||!cv.captureStream) return msg('المتصفح لا يدعم التصدير');
+  if(playing) finish();
+  audio();
+  const tracks=[...cv.captureStream(30).getVideoTracks(), ...mix.stream.getAudioTracks()];
+  chunks=[];
+  const type=MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')?'video/webm;codecs=vp8,opus':'video/webm';
+  rec=new MediaRecorder(new MediaStream(tracks),{mimeType:type});
+  rec.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+  rec.onstop=()=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));
+    a.download='film-النشاط.webm'; document.body.appendChild(a); a.click(); a.remove();
+    msg('✔ تم التصدير — الملف في التنزيلات'); rec=null;
   };
-  playhead = 0;
-  playing = true;
-  setPlayBtn();
-  last = performance.now();
   rec.start();
-  place('v', true); place('a', true);
-  $('status').textContent = 'جارٍ التصدير (بالوقت الفعلي)...';
+  msg('⏺ جاري التسجيل بالوقت الحقيقي… لا تغلق الصفحة');
+  play();
 }
-
-function stopExport() {
-  playing = false;
-  setPlayBtn();
-  exporting.rec.stop();
-  place('v', true); place('a', true);
-}
-
-// Raccourcis clavier
-document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
-  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-  if (e.code === 'ArrowRight') step(1);
-  if (e.code === 'ArrowLeft') step(-1);
-  if (e.code === 'Delete') delSel();
-});
-
-render();
-requestAnimationFrame(tick);
 </script>
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js');}</script>
+<script>
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}
+</script>
 </body>
 </html>
