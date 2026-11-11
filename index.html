@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>محرر فيديو مصغر</title>
+<style>
+:root{--bg:#16171b;--panel:#21232a;--line:#33363f;--txt:#e8e8ec;--v:#2f6fd6;--a:#2f9d6a}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,Tahoma,sans-serif;background:var(--bg);color:var(--txt);height:100vh;display:flex;flex-direction:column}
+header{display:flex;gap:8px;padding:8px;background:var(--panel);align-items:center;flex-wrap:wrap}
+button,input{background:#2c2f38;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit}
+main{display:flex;flex:1;min-height:0}
+#left{flex:1;display:flex;padding:8px;min-width:0}
+#pv{width:100%;height:100%;background:#000;border-radius:8px;object-fit:contain}
+#insp{width:240px;background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:10px;font-size:14px}
+#insp label{display:flex;flex-direction:column;gap:4px}
+#tl{height:250px;background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;direction:ltr}
+#tlbar{display:flex;gap:10px;align-items:center;padding:6px 8px;font-size:13px}
+#scroll{overflow:auto;flex:1}
+#inner{position:relative;height:170px}
+#ruler{height:22px;position:relative;border-bottom:1px solid var(--line)}
+.tick{position:absolute;top:0;font-size:10px;color:#999;border-left:1px solid #555;padding-left:2px;height:22px}
+.track{height:74px;position:relative;border-bottom:1px solid var(--line)}
+.clip{position:absolute;top:6px;height:60px;border-radius:6px;padding:4px 6px;font-size:12px;overflow:hidden;white-space:nowrap;cursor:pointer;border:2px solid transparent;direction:rtl}
+.clip.v{background:var(--v)}
+.clip.a{background:var(--a)}
+.clip.sel{border-color:#fff}
+#ph{position:absolute;top:0;bottom:0;width:2px;background:#ff5c5c;pointer-events:none;z-index:5}
+#time{font-variant-numeric:tabular-nums;font-size:15px;direction:ltr}
+</style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#21232a">
+<link rel="apple-touch-icon" href="icon-512.png">
+</head>
+<body>
+<header>
+  <button onclick="pick('v')">+ فيديو</button>
+  <button onclick="pick('a')">+ صوت</button>
+  <button id="bPlay" onclick="togglePlay()">▶ تشغيل</button>
+  <button onclick="step(-1)">◀ إطار</button>
+  <button onclick="step(1)">إطار ▶</button>
+  <span id="time">00:00.00</span>
+  <button onclick="split()">✂ قص عند المؤشر</button>
+  <button onclick="delSel()">🗑 حذف</button>
+  <button onclick="exportWebM()">⬇ تصدير WebM</button>
+  <span id="status" style="font-size:12px;color:#aaa"></span>
+</header>
+<main>
+  <div id="left"><canvas id="pv" width="1280" height="720"></canvas></div>
+  <aside id="insp"><b>الخصائص</b><div id="iForm">اختر مقطعاً من المسار الزمني</div></aside>
+</main>
+<section id="tl">
+  <div id="tlbar"><span>تكبير</span><input type="range" min="10" max="200" value="50" oninput="pxPerSec=+this.value;render()"></div>
+  <div id="scroll"><div id="inner"></div></div>
+</section>
+<input type="file" id="fi" hidden>
+<video id="vid" playsinline style="position:fixed;width:1px;opacity:0;pointer-events:none"></video>
+<audio id="aud"></audio>
+
+<script>
+const $ = id => document.getElementById(id);
+let clips = [], nextId = 1, pxPerSec = 50, playhead = 0, playing = false, selId = null, last = 0, exporting = null;
+const vid = $('vid'), aud = $('aud'), cv = $('pv'), ctx = cv.getContext('2d'), inner = $('inner');
+const els = { v: vid, a: aud };
+
+// Graphe audio : permet d'enregistrer le son pendant l'export
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+const dest = AC.createMediaStreamDestination();
+[vid, aud].forEach(el => {
+  const src = AC.createMediaElementSource(el);
+  src.connect(AC.destination);
+  src.connect(dest);
+});
+
+const L = c => (c.out - c.in) / c.speed;                       // durée sur la timeline
+const total = () => clips.reduce((m, c) => Math.max(m, c.start + L(c)), 0);
+const clipAt = (k, t) => clips.find(c => c.track === k && t >= c.start && t < c.start + L(c));
+const sel = () => clips.find(c => c.id === selId);
+const fmt = t => String(Math.floor(t / 60)).padStart(2, '0') + ':' + (t % 60).toFixed(2).padStart(5, '0');
+
+// Synchronise un élément média avec la tête de lecture
+function place(k, force) {
+  const el = els[k], c = clipAt(k, playhead);
+  if (!c) { el.pause(); el.dataset.cid = ''; return; }
+  const t = c.in + (playhead - c.start) * c.speed;
+  if (el.dataset.cid != c.id) {
+    el.dataset.cid = c.id;
+    el.dataset.want = t;
+    el.src = c.url;
+  } else if (force) {
+    el.currentTime = t;
+  }
+  el.playbackRate = c.speed;
+  el.volume = c.vol;
+  if (playing && el.paused) el.play().catch(() => {});
+  if (!playing && !el.paused) el.pause();
+}
+[vid, aud].forEach(el => el.addEventListener('loadedmetadata', () => {
+  if (el.dataset.want !== undefined) {
+    el.currentTime = +el.dataset.want;
+    delete el.dataset.want;
+    if (playing) el.play().catch(() => {});
+  }
+}));
+
+function seek(t, force = true) {
+  playhead = Math.max(0, Math.min(t, total()));
+  place('v', force); place('a', force);
+  updateUI();
+}
+
+function setPlayBtn() { $('bPlay').textContent = playing ? '⏸ إيقاف' : '▶ تشغيل'; }
+
+function togglePlay() {
+  if (exporting) return;
+  AC.resume();
+  playing = !playing;
+  if (playing && playhead >= total()) playhead = 0;
+  setPlayBtn();
+  last = performance.now();
+  place('v', true); place('a', true);
+}
+
+function step(n) {
+  if (playing) togglePlay();
+  seek(playhead + n / 30);
+}
+
+// Boucle principale : avance la tête, dessine l'aperçu
+function tick(now) {
+  if (playing) {
+    playhead += (now - last) / 1000;
+    if (playhead >= total()) {
+      playhead = total();
+      if (exporting) stopExport(); else togglePlay();
+    } else {
+      place('v'); place('a');
+    }
+  }
+  last = now;
+  draw();
+  updateUI();
+  requestAnimationFrame(tick);
+}
+
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  const c = clipAt('v', playhead);
+  if (c && vid.dataset.cid == c.id && vid.readyState >= 2 && vid.videoWidth) {
+    const r = Math.min(cv.width / vid.videoWidth, cv.height / vid.videoHeight);
+    const w = vid.videoWidth * r, h = vid.videoHeight * r;
+    ctx.drawImage(vid, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+  }
+}
+
+function updateUI() {
+  $('time').textContent = fmt(playhead);
+  const ph = $('ph');
+  if (ph) ph.style.left = (playhead * pxPerSec) + 'px';
+}
+
+// Import
+function pick(k) {
+  $('fi').accept = k === 'v' ? 'video/*' : 'audio/*';
+  $('fi').dataset.k = k;
+  $('fi').click();
+}
+$('fi').onchange = e => {
+  const file = e.target.files[0], k = e.target.dataset.k;
+  e.target.value = '';
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const m = document.createElement(k === 'v' ? 'video' : 'audio');
+  m.preload = 'metadata';
+  m.src = url;
+  m.onloadedmetadata = () => {
+    const start = clips.filter(c => c.track === k).reduce((mx, c) => Math.max(mx, c.start + L(c)), 0);
+    clips.push({ id: nextId++, track: k, name: file.name, url, start, in: 0, out: m.duration, speed: 1, vol: 1 });
+    render();
+  };
+};
+
+// Montage
+function split() {
+  const hits = clips.filter(c => playhead > c.start + 0.01 && playhead < c.start + L(c) - 0.01);
+  if (!hits.length) { $('status').textContent = 'لا يوجد مقطع عند المؤشر'; return; }
+  hits.forEach(c => {
+    const off = (playhead - c.start) * c.speed;
+    const right = { ...c, id: nextId++, start: playhead, in: c.in + off };
+    c.out = c.in + off;
+    clips.push(right);
+  });
+  $('status').textContent = '';
+  render();
+}
+
+function delSel() {
+  if (selId == null) return;
+  clips = clips.filter(c => c.id !== selId);
+  selId = null;
+  render();
+  updateInspector();
+  place('v', true); place('a', true);
+}
+
+function setP(k, v) {
+  const c = sel();
+  if (!c) return;
+  c[k] = v;
+  render();
+  place('v'); place('a');
+}
+
+function updateInspector() {
+  const c = sel();
+  if (!c) { $('iForm').textContent = 'اختر مقطعاً من المسار الزمني'; return; }
+  $('iForm').innerHTML = `
+    <div style="word-break:break-all">${c.name}</div>
+    <label>السرعة: ${c.speed}x
+      <input type="range" min="0.25" max="4" step="0.25" value="${c.speed}" oninput="this.previousSibling.textContent='السرعة: '+this.value+'x';setP('speed',+this.value)">
+    </label>
+    <label>الصوت: ${Math.round(c.vol * 100)}%
+      <input type="range" min="0" max="1" step="0.05" value="${c.vol}" oninput="this.previousSibling.textContent='الصوت: '+Math.round(this.value*100)+'%';setP('vol',+this.value)">
+    </label>
+    <small>المدة على المسار: ${L(c).toFixed(2)} ث</small>`;
+}
+
+// Timeline
+function render() {
+  const T = total(), W = Math.max(T + 5, 30) * pxPerSec;
+  const step = pxPerSec < 25 ? 5 : 1;
+  let ticks = '';
+  for (let s = 0; s * pxPerSec <= W; s += step) {
+    ticks += `<span class="tick" style="left:${s * pxPerSec}px">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</span>`;
+  }
+  const row = k => clips.filter(c => c.track === k).map(c =>
+    `<div class="clip ${k}${c.id === selId ? ' sel' : ''}" data-id="${c.id}"
+      style="left:${c.start * pxPerSec}px;width:${Math.max(L(c) * pxPerSec, 8)}px">${c.name}</div>`).join('');
+  inner.style.width = W + 'px';
+  inner.innerHTML = `<div id="ruler">${ticks}</div>
+    <div class="track" data-t="v">${row('v')}</div>
+    <div class="track" data-t="a">${row('a')}</div><div id="ph"></div>`;
+  updateUI();
+}
+
+inner.onclick = e => {
+  const cl = e.target.closest('.clip');
+  if (cl) {
+    selId = +cl.dataset.id;
+    render();
+    updateInspector();
+    return;
+  }
+  if (e.target.closest('#ruler,.track')) {
+    const r = inner.getBoundingClientRect();
+    seek((e.clientX - r.left) / pxPerSec);
+  }
+};
+
+// Export : rejoue le montage dans un canevas et enregistre en WebM
+function exportWebM() {
+  if (!clips.length || exporting) return;
+  AC.resume();
+  const rec = new MediaRecorder(
+    new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]),
+    { mimeType: 'video/webm;codecs=vp8,opus' }
+  );
+  exporting = { rec, chunks: [] };
+  rec.ondataavailable = e => e.data.size && exporting.chunks.push(e.data);
+  rec.onstop = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(exporting.chunks, { type: 'video/webm' }));
+    a.download = 'montage.webm';
+    a.click();
+    exporting = null;
+    $('status').textContent = 'تم التصدير';
+  };
+  playhead = 0;
+  playing = true;
+  setPlayBtn();
+  last = performance.now();
+  rec.start();
+  place('v', true); place('a', true);
+  $('status').textContent = 'جارٍ التصدير (بالوقت الفعلي)...';
+}
+
+function stopExport() {
+  playing = false;
+  setPlayBtn();
+  exporting.rec.stop();
+  place('v', true); place('a', true);
+}
+
+// Raccourcis clavier
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowRight') step(1);
+  if (e.code === 'ArrowLeft') step(-1);
+  if (e.code === 'Delete') delSel();
+});
+
+render();
+requestAnimationFrame(tick);
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js');}</script>
+</body>
+</html>
